@@ -1,0 +1,98 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry} 
+\usepackage{amsmath,amsthm,amssymb,amsfonts,algpseudocode,graphicx,mathtools}
+
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+
+\newenvironment{problem}[2][Problem]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+%If you want to title your bold things something different just make another thing exactly like this but replace ``problem'' with the name of the thing you want, like theorem or lemma or whatever
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lem}{Lemma}
+\DeclarePairedDelimiter{\ceil}{\lceil}{\rceil}
+
+\begin{document}
+%\renewcommand{\qedsymbol}{\filledbox}
+%Good resources for looking up how to do stuff:
+%Binary operators: http://www.access2science.com/latex/Binary.html
+%General help: http://en.wikibooks.org/wiki/LaTeX/Mathematics
+%Or just google stuff
+
+\title{CMPSCI-683 Homework Assignment \#2: Constraint Satisfaction and Adversarial Search}
+\author{Patrick Pegus II}
+\maketitle
+
+\begin{problem}{1}
+	Show that any CSP that has a finite domain for each variable can be transformed into a CSP with only binary constraints. Follow these steps:
+	\begin{enumerate}
+		\item Show how a single ternary constraint such as $A+B=C$ can be turned into three binary constraints by using an auxiliary variable.
+			(Hint: consider a new variable $AB$ whose domain is pairs of numbers.)
+		\item Next, show how constraints with more than three variables can be treated similarly.
+		\item Finally, show how unary constraints can be eliminated by altering the domains of variables.
+	\end{enumerate}
+	\begin{enumerate}
+		\item Let $D_{AB}=\{a+b|a \in D_a, b \in D_b\}$ be the domain of the variable $AB$.
+			Then $A+B=C$  can be replaced by $AB=C$, $A = a$, $B = b$.
+		\item Iteratively remove variables from non-binary constraints, such as
+			\begin{align*}
+				V_1 * \dots * V_i * V_{i+1} * \dots * V_m = V_n
+			\end{align*}
+			by replacing it with
+			\begin{align*}
+				V_1 * \dots * V_iV_{i+1} * \dots *V_m = V_n \text{, } V_i = v_i \text{, } V_{i+1} = v_{i+1}
+			\end{align*}
+			until only binary constraints exist.
+			Where $D_{V_iV_{i+1}} = \{v_i * v_{i+1}| v_i \in D_{v_i}, v_{i+1} \in D_{v_{i+1}}\}$.
+		\item Any unary constraint $U$ that imposes a condition on variable $V$, such as $U(V)=True$,
+			can be eliminated after reducing the domain of $V$ to only values $v$ where $U(v)=True$.
+	\end{enumerate}
+\end{problem}
+\begin{problem}{2}
+	Sudoku is a fairly old puzzle that is now a worldwide phenomenon.
+	You can type ``sudoku'' into Google, or read the Wikipedia article to get more information than you could possibly imagine.
+	Key facts about standard Sudoku puzzles:
+	\begin{itemize}
+		\item Every puzzle has a unique solution.
+		\item Every puzzle is solvable without trial-and-error, given suitable inference methods.
+		\item The designated difficulty of a puzzle is usually determined by the difficulty of the inference methods required to solve it.
+	\end{itemize}
+	In addition to the rules, many web sites offer extensive discussion of methods that humans can use to solve Sudoku without using trial-and-error search.
+	You need to write a program that can solve Sudoku problem instances. To test your program, you should apply it to the following 16 puzzles:
+	See \texttt{/data/}. \\
+	These puzzles are from ``Sudoku: Easy to Hard'', by Will Shortz.
+	The original collection includes 100 puzzles (from 1-25 are 'light and easy', 26-50 are 'moderate', 51-75 are 'demanding', and 76-100 are 'beware! very challenging').
+	Each puzzle is stored in a file that looks as follows: \\
+
+	\begin{tabular}{ccccccccc}
+		- & 1 & 9 & - & - & - & - & - & - \\
+		- & - & 8 & - & - & 3 & - & 5 & - \\
+		- & 7 & - & 6 & - & - & - & 8 & - \\
+		- & - & 1 & - & - & 6 & 8 & - & 9 \\
+		8 & - & - & - & 4 & - & - & - & 7 \\
+		9 & 4 & - & - & - & - & - & 1 & - \\
+		- & - & - & - & - & 2 & - & - & - \\
+		- & - & - & - & 8 & - & 5 & 6 & 1 \\
+		- & - & 3 & 7 & - & - & - & 9 & - \\
+	\end{tabular}
+	\begin{enumerate}
+		\item Explain how Sudoku can be represented as a CSP (how many variables are needed? what are their domains? what are the constraints?). 
+		\item Write a program that can read a Sudoku puzzle from a file and solve it using the backtracking-search algorithm that was discussed in class (slide 16).
+			Keep in mind that instead of representing the constraints explicitly in your program, it might be easier to write a function that checks if a given variable assignment results in a conflict with the values already placed in its row/column/square.
+	\end{enumerate}
+	\begin{enumerate}
+		\item Sudoku can be represented as a CSP with a matrix of variables $M=V_{ij}$ for the entries in the puzzle.
+			$i$ and $j$ are the row and column index, respectively.
+			Since $i$ and $j$ are integers in $[1,9]$, there are 81 variables.
+			The domains of each $V_{ij}$ are the integers in $[1,9]$.
+			The constraints are:
+			\begin{enumerate}
+				\item $V_{ij} \neq V_{ik}$, if $j \neq k$
+				\item $V_{ij} \neq V_{kj}$, if $i \neq k$
+				\item When $M$ is partitioned into 9 3x3 matrices $m = V_{ab}$, $V_{ab} \neq V_{cd}$ , if $a \neq c$ or $b \neq d$.
+			\end{enumerate}
+	\end{enumerate}
+\end{problem}
+
+\end{document}
