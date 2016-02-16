@@ -60,7 +60,7 @@
 	\end{itemize}
 	In addition to the rules, many web sites offer extensive discussion of methods that humans can use to solve Sudoku without using trial-and-error search.
 	You need to write a program that can solve Sudoku problem instances. To test your program, you should apply it to the following 16 puzzles:
-	See \texttt{/data/}. \\
+	See \texttt{/data/sudoku_puzzles/}. \\
 	These puzzles are from ``Sudoku: Easy to Hard'', by Will Shortz.
 	The original collection includes 100 puzzles (from 1-25 are 'light and easy', 26-50 are 'moderate', 51-75 are 'demanding', and 76-100 are 'beware! very challenging').
 	Each puzzle is stored in a file that looks as follows: \\
@@ -80,6 +80,9 @@
 		\item Explain how Sudoku can be represented as a CSP (how many variables are needed? what are their domains? what are the constraints?). 
 		\item Write a program that can read a Sudoku puzzle from a file and solve it using the backtracking-search algorithm that was discussed in class (slide 16).
 			Keep in mind that instead of representing the constraints explicitly in your program, it might be easier to write a function that checks if a given variable assignment results in a conflict with the values already placed in its row/column/square.
+
+			Try to solve a few of the Sudoku instances using this algorithm and make sure that it works.
+			Explain why can plain backtracking search solve Sudoku puzzles quickly despite the size of the problem?
 	\end{enumerate}
 	\begin{enumerate}
 		\item Sudoku can be represented as a CSP with a matrix of variables $M=V_{ij}$ for the entries in the puzzle.
