@@ -1,26 +1,97 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import argparse
+import datetime as dt
 import itertools as it
+import multiprocessing as mp
 import numpy as np
+import os
 import pandas as pd
+import sys
 
 import csp
 
 
 def main():
-    domain = Sudoku.domain('../data/sudoku_puzzles/sudoku_ex.txt')
+    args = parseArgs(sys.argv)
+    problems = {
+        2: p2,
+        3: p3,
+    }
+    problems[args.number](args)
+
+
+def p2(args):
+    domain = Sudoku.domain('../data/sudoku_example/sudoku_ex.txt')
     s = Sudoku(domain)
-    print(csp.simpleBacktrackSearch(s))
+    sol = csp.simpleBacktrackSearch(
+        s,
+        selectUnassignedVariableIndex=csp.noReorder,
+    )
+    print(sol)
+    assert np.all(np.equal(
+        sol[0].values,
+        np.array([
+            [4, 3, 5, 2, 6, 9, 7, 8, 1],
+            [6, 8, 2, 5, 7, 1, 4, 9, 3],
+            [1, 9, 7, 8, 3, 4, 5, 6, 2],
+            [8, 2, 6, 1, 9, 5, 3, 4, 7],
+            [3, 7, 4, 6, 8, 2, 9, 1, 5],
+            [9, 5, 1, 7, 4, 3, 6, 2, 8],
+            [5, 1, 9, 3, 2, 6, 8, 7, 4],
+            [2, 4, 8, 9, 5, 7, 1, 3, 6],
+            [7, 6, 3, 4, 1, 8, 2, 5, 9],
+        ])
+    ))
+
+
+def p3(args):
+    pool = mp.Pool(2)
+    pool.map(
+        p3each,
+        list(it.product(
+            [args],
+            sorted(next(os.walk(args.puzzledir))[2]),
+            [csp.noReorder.__name__, csp.mrv.__name__],
+        )),
+    )
+
+
+def p3each(argsFnOrder):
+    args, fn, order = argsFnOrder
+    order = csp.noReorder if order == csp.noReorder.__name__ else csp.mrv
+    outFile = os.path.join(
+        args.outdir,
+        'p3_{}_{}.csv'.format(
+            os.path.splitext(fn)[0],
+            order.__name__,
+        ),
+    )
+    if os.path.isfile(outFile):
+        return
+    domain = Sudoku.domain(os.path.join(args.puzzledir, fn))
+    start = dt.datetime.now()
+    s = Sudoku(domain)
+    sol, guessCnt = csp.simpleBacktrackSearch(
+        s,
+        selectUnassignedVariableIndex=order,
+    )
+    compTime = (dt.datetime.now()-start).total_seconds()
+    with open(outFile, 'w') as f:
+        f.write('puzzle, order, guessCnt, compTime, solution\n')
+        f.write('"{}","{}","{}","{}","{}"'.format(
+            os.path.splitext(fn)[0],
+            order.__name__,
+            guessCnt,
+            compTime,
+            sol.values.tolist(),
+        ))
+    print('{} {} {} {}'.format(fn, order.__name__, guessCnt, compTime))
 
 
 class Sudoku(csp.CSP):
     def __init__(self, domain):
         self.d = domain
-
-    def oldassignments(self):
-        return [idx for idx in it.product(self.d.index, self.d.columns) if
-                self.d.loc[idx]]
 
     def assignments(self):
         # get row indices where domain size is 1
@@ -82,6 +153,15 @@ class Sudoku(csp.CSP):
     def copy(self):
         return Sudoku(self.d.copy())
 
+    def inferences(self):
+        changed = 1
+        while changed:
+            changed = 0
+            changed += self.ac3()
+
+    def ac3(self):
+        return False
+
     @staticmethod
     def domain(fn):
         index = pd.MultiIndex.from_tuples(
@@ -126,6 +206,12 @@ def parseArgs(args):
         '-o', '--outdir',
         default='../data/sudoku_out/',
         help='Directory to place results.',
+    )
+    parser.add_argument(
+        '-n', '--number',
+        default=3,
+        type=int,
+        help='Problem number in {}'.format(range(2, 4)),
     )
     return parser.parse_args()
 

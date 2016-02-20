@@ -60,7 +60,7 @@
 	\end{itemize}
 	In addition to the rules, many web sites offer extensive discussion of methods that humans can use to solve Sudoku without using trial-and-error search.
 	You need to write a program that can solve Sudoku problem instances. To test your program, you should apply it to the following 16 puzzles:
-	See \texttt{/data/sudoku_puzzles/}. \\
+	See \texttt{/data/sudoku\_puzzles/}. \\
 	These puzzles are from ``Sudoku: Easy to Hard'', by Will Shortz.
 	The original collection includes 100 puzzles (from 1-25 are 'light and easy', 26-50 are 'moderate', 51-75 are 'demanding', and 76-100 are 'beware! very challenging').
 	Each puzzle is stored in a file that looks as follows: \\
@@ -95,6 +95,8 @@
 				\item $V_{ij} \neq V_{kj}$, if $i \neq k$
 				\item When $M$ is partitioned into 9 3x3 matrices $m = V_{ab}$, $V_{ab} \neq V_{cd}$ , if $a \neq c$ or $b \neq d$.
 			\end{enumerate}
+		\item Please see the \texttt{simpleBacktrackSearch} function in csp.py for the implementation of the backtracking algorithm.
+			\textbf{TODO: Write explanation.}
 	\end{enumerate}
 \end{problem}
 
