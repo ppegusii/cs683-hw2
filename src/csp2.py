@@ -24,6 +24,7 @@ def simpleBacktrackSearch(
     guessCnt += len(values)-1
     for val in values:
         if csp.isConsistent(varIdx, val):
+            varD = csp.domain(varIdx)
             csp.setAssignment(varIdx, val)
             result, guessCnt = simpleBacktrackSearch(
                 csp.copy(),
@@ -32,6 +33,7 @@ def simpleBacktrackSearch(
             )
             if result is not None:
                 return result, guessCnt
+            csp.setDomain(varIdx, varD)
     return None, guessCnt
 
 
@@ -49,6 +51,12 @@ class CSP:
         pass
 
     def isConsistent(self, varIdx, val):
+        pass
+
+    def domain(self, varIdx):
+        pass
+
+    def setDomain(self, varIdx, d):
         pass
 
     def setAssignment(self, varIdx, val):

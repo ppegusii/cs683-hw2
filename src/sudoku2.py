@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import argparse
+import copy
 import datetime as dt
 import itertools as it
 import multiprocessing as mp
@@ -9,7 +10,7 @@ import os
 import pandas as pd
 import sys
 
-import csp
+import csp2
 
 
 def main():
@@ -22,11 +23,11 @@ def main():
 
 
 def p2(args):
-    domain = Sudoku.domain('../data/sudoku_example/sudoku_ex.txt')
-    s = Sudoku(domain)
-    sol = csp.simpleBacktrackSearch(
+    d, a = Sudoku.domainAssigned('../data/sudoku_example/sudoku_ex.txt')
+    s = Sudoku(d, a)
+    sol = csp2.simpleBacktrackSearch(
         s,
-        selectUnassignedVariableIndex=csp.noReorder,
+        selectUnassignedVariableIndex=csp2.noReorder,
     )
     print(sol)
     assert np.all(np.equal(
@@ -52,14 +53,14 @@ def p3(args):
         list(it.product(
             [args],
             sorted(next(os.walk(args.puzzledir))[2]),
-            [csp.noReorder.__name__, csp.mrv.__name__],
+            [csp2.noReorder.__name__, csp2.mrv.__name__],
         )),
     )
 
 
 def p3each(argsFnOrder):
     args, fn, order = argsFnOrder
-    order = csp.noReorder if order == csp.noReorder.__name__ else csp.mrv
+    order = csp2.noReorder if order == csp2.noReorder.__name__ else csp2.mrv
     outFile = os.path.join(
         args.outdir,
         'p3_{}_{}.csv'.format(
@@ -71,10 +72,10 @@ def p3each(argsFnOrder):
         return
     print('{} Starting: {} {}'.format(
         dt.datetime.now(), os.path.splitext(fn)[0], order.__name__))
-    domain = Sudoku.domain(os.path.join(args.puzzledir, fn))
+    d, a = Sudoku.domainAssigned(os.path.join(args.puzzledir, fn))
     start = dt.datetime.now()
-    s = Sudoku(domain)
-    sol, guessCnt = csp.simpleBacktrackSearch(
+    s = Sudoku(d, a)
+    sol, guessCnt = csp2.simpleBacktrackSearch(
         s,
         selectUnassignedVariableIndex=order,
     )
@@ -93,71 +94,66 @@ def p3each(argsFnOrder):
         compTime))
 
 
-class Sudoku(csp.CSP):
-    def __init__(self, domain):
+class Sudoku(csp2.CSP):
+    def __init__(self, domain, assignments):
         self.d = domain
+        self.a = assignments
 
     def assignments(self):
         # get row indices where domain size is 1
-        rds1 = self.d[self.d.sum(axis=1) == 1]
         p = pd.DataFrame(
             np.full((9, 9), 0, dtype=np.uint8),
             index=range(1, 10),
             columns=range(1, 10),
         )
-        asns = [idx for idx in it.product(rds1.index, rds1.columns) if
-                rds1.loc[idx]]
-        for a in asns:
-            p.loc[a[0]] = a[1]
+        for varIdx, val in self.a.viewitems():
+            p.loc[varIdx[0], varIdx[1]] = val
         return p
 
     def isCompleteAssignment(self):
-        return self.d.sum().sum() == 81
+        return len(self.a) == 81
 
     def unassignedVariablesIndexes(self):
-        return self.d[self.d.sum(axis=1) > 1].index
+        return iter(self.d.viewkeys())
 
     def selectUnassignedVariableIndex(self):
-        return self.unassignedVariablesIndexes()[0]
+        return next(self.unassignedVariablesIndexes())
 
     def orderDomainValues(self, varIdx):
-        return self.d.loc[varIdx][self.d.loc[varIdx]].index
+        return self.d[varIdx]
 
     def isConsistent(self, varIdx, val):
-        oldAss = self.d.loc[varIdx].copy()
-        self.setAssignment(varIdx, val)
-        p = self.assignments()
-        for i in range(1, 10):
-            rowValCnts = p.loc[i, :].value_counts().drop(0, errors='ignore')
-            colValCnts = p.loc[:, i].value_counts().drop(0, errors='ignore')
-            if (
-                # check row consistency
-                (len(rowValCnts) > 0 and rowValCnts.iloc[0] > 1) or
-                # check col consistency
-                (len(colValCnts) > 0 and colValCnts.iloc[0] > 1)
-            ):
-                self.d.loc[varIdx] = oldAss
-                return False
-        '''
-        for i in range(0, 3):
-            for j in range(0, 3):
-                # check submatrix consistency
-                subP = pd.Series(
-                    p.loc[3*i+1:3*i+3, 3*j+1:3*j+3].values.flatten())
-                valCnts = subP.value_counts().drop(0, errors='ignore')
-                if len(valCnts) > 0 and valCnts.iloc[0] > 1:
-                    self.d.loc[varIdx] = oldAss
-                    return False
-        '''
-        # check submatrix consistency
-        ulr, ulc = Sudoku.threeByThreeUpperLeft(varIdx)
-        subP = pd.Series(
-            p.loc[ulr:ulr+2, ulc:ulc+2].values.flatten())
-        valCnts = subP.value_counts().drop(0, errors='ignore')
-        if len(valCnts) > 0 and valCnts.iloc[0] > 1:
-            self.d.loc[varIdx] = oldAss
+        self.a[varIdx] = val
+        # Row consistency
+        rowVals = []
+        for i in xrange(1, 10):
+            rowVal = self.a.get((varIdx[0], i))
+            if rowVal is not None:
+                rowVals.append(rowVal)
+        if len(rowVals) != len(set(rowVals)):
+            del self.a[varIdx]
             return False
-        self.d.loc[varIdx] = oldAss
+        # Column consistency
+        colVals = []
+        for i in xrange(1, 10):
+            colVal = self.a.get((i, varIdx[1]))
+            if colVal is not None:
+                colVals.append(colVal)
+        if len(colVals) != len(set(colVals)):
+            del self.a[varIdx]
+            return False
+        # 3x3 consistency
+        ulr, ulc = Sudoku.threeByThreeUpperLeft(varIdx)
+        vals = []
+        for i in xrange(ulr, ulr+3):
+            for j in xrange(ulc, ulc+3):
+                val = self.a.get((i, j))
+                if val is not None:
+                    vals.append(val)
+        if len(vals) != len(set(vals)):
+            del self.a[varIdx]
+            return False
+        del self.a[varIdx]
         return True
 
     @staticmethod
@@ -166,16 +162,28 @@ class Sudoku(csp.CSP):
         ulc = (varIdx[1] - 1) / 3 * 3 + 1
         return ulr, ulc
 
+    def domain(self, varIdx):
+        return self.d[varIdx]
+
+    def setDomain(self, varIdx, d):
+        del self.a[varIdx]
+        self.d[varIdx] = d
+
     def setAssignment(self, varIdx, val):
-        self.d.loc[varIdx] = False
-        self.d.loc[varIdx, val] = True
+        del self.d[varIdx]
+        self.a[varIdx] = val
 
     def copy(self):
-        return Sudoku(self.d.copy())
+        return Sudoku(copy.deepcopy(self.d), copy.copy(self.a))
 
     def neighbors(self, varIdx):
         n = set([(varIdx[0], i) for i in xrange(1, 10)])
         n.update([(i, varIdx[1]) for i in xrange(1, 10)])
+        ulr, ulc = Sudoku.threeByThreeUpperLeft(varIdx)
+        n.update([(i, j) for i in xrange(ulr, ulr+3)
+                  for j in xrange(ulc, ulc+3)])
+        n.remove(varIdx)
+        return n
 
     def inferences(self):
         changed = InferenceResult.change
@@ -184,22 +192,33 @@ class Sudoku(csp.CSP):
             changed += self.ac3()
 
     def ac3(self):
-        q = self.unassignedVariablesIndexes().tolist()
+        anyChange = False
+        q = list(self.unassignedVariablesIndexes())
         while len(q) > 0:
-            pass
-        return False
+            change = False
+            varIdx = q.pop()
+            domain = self.d[varIdx]
+            # indices of assigned neighbors
+            neighbors = self.neighbors(varIdx)
+            aIdxs = self.a.viewkeys() & neighbors
+            for aIdx in aIdxs:
+                try:
+                    domain.remove(self.a[aIdx])
+                    anyChange = True
+                    change = True
+                    if len(domain) == 0:
+                        return InferenceResult.failure
+                except:
+                    pass
+            if change:
+                # add unassigned neighbors back to q
+                q += self.d.viewkeys() & neighbors
+        return InferenceResult.change if anyChange else InferenceResult.noChange
 
     @staticmethod
-    def domain(fn):
-        index = pd.MultiIndex.from_tuples(
-            list(it.product(range(1, 10), repeat=2)),
-            names=['row', 'col'],
-        )
-        d = pd.DataFrame(
-            np.full((81, 9), True, dtype=bool),
-            index=index,
-            columns=range(1, 10),
-        )
+    def domainAssigned(fn):
+        d = {}
+        a = {}
         p = pd.read_csv(
             fn,
             sep=' ',
@@ -213,10 +232,11 @@ class Sudoku(csp.CSP):
         p.index = range(1, 10)
         for r in range(1, 10):
             for c in range(1, 10):
-                if p.loc[r, c] != 0:
-                    d.loc[(r, c)] = False
-                    d.loc[(r, c), p.loc[r, c]] = True
-        return d
+                if p.loc[r, c] == 0:
+                    d[(r, c)] = set(range(1, 10))
+                else:
+                    a[(r, c)] = int(p.loc[r, c])
+        return d, a
 
 
 class InferenceResult:
