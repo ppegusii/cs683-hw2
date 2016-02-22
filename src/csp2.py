@@ -15,10 +15,11 @@ def simpleBacktrackSearch(
     csp,
     guessCnt=0,
     selectUnassignedVariableIndex=noReorder,
+    inferences = [],
 ):
     if csp.isCompleteAssignment():
         return csp.assignments(), guessCnt
-    # csp.inferences()
+    csp.inferences(inferences)
     varIdx = selectUnassignedVariableIndex(csp)
     values = csp.orderDomainValues(varIdx)
     guessCnt += len(values)-1
@@ -67,3 +68,9 @@ class CSP:
 
     def inferences(self):
         pass
+
+
+class InferenceResult:
+    noChange = 0
+    change = 1
+    failure = 2

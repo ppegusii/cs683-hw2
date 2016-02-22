@@ -18,6 +18,7 @@ def main():
     problems = {
         2: p2,
         3: p3,
+        4: p4,
     }
     problems[args.number](args)
 
@@ -47,25 +48,37 @@ def p2(args):
 
 
 def p3(args):
+    argsFnOrder = [list(x) for x in list(it.product(
+        [args],
+        sorted(next(os.walk(args.puzzledir))[2]),
+        [csp2.noReorder.__name__, csp2.mrv.__name__],
+    ))]
+    # add empty inferences
+    map(lambda x: x.append([]), argsFnOrder)
+    argsFnOrderInf = [tuple(x) for x in argsFnOrder]
+    pool = mp.Pool()
+    pool.map(pEach, argsFnOrderInf)
+
+
+def p4(args):
     pool = mp.Pool()
     pool.map(
-        p3each,
-        list(it.product(
-            [args],
-            sorted(next(os.walk(args.puzzledir))[2]),
-            [csp2.noReorder.__name__, csp2.mrv.__name__],
-        )),
+        pEach,
+        [(args, fn, csp2.mrv.__name__, [InferenceType.ac3]) for fn in
+         sorted(next(os.walk(args.puzzledir))[2])],
     )
 
 
-def p3each(argsFnOrder):
-    args, fn, order = argsFnOrder
+def pEach(argsFnOrderInf):
+    args, fn, order, infTypes = argsFnOrderInf
     order = csp2.noReorder if order == csp2.noReorder.__name__ else csp2.mrv
     outFile = os.path.join(
         args.outdir,
-        'p3_{}_{}.csv'.format(
+        'p{}_{}_{}{}.csv'.format(
+            args.number,
             os.path.splitext(fn)[0],
             order.__name__,
+            '_{}'.format('-'.join(infTypes)) if len(infTypes) > 0 else '',
         ),
     )
     if os.path.isfile(outFile):
@@ -75,6 +88,7 @@ def p3each(argsFnOrder):
     d, a = Sudoku.domainAssigned(os.path.join(args.puzzledir, fn))
     start = dt.datetime.now()
     s = Sudoku(d, a)
+    s.ac3(repeat=False)
     sol, guessCnt = csp2.simpleBacktrackSearch(
         s,
         selectUnassignedVariableIndex=order,
@@ -82,9 +96,10 @@ def p3each(argsFnOrder):
     compTime = (dt.datetime.now()-start).total_seconds()
     with open(outFile, 'w') as f:
         f.write('puzzle, order, guessCnt, compTime, solution\n')
-        f.write('"{}","{}","{}","{}","{}"'.format(
+        f.write('"{}","{}","{}","{}","{}","{}"'.format(
             os.path.splitext(fn)[0],
             order.__name__,
+            '-'.join(infTypes),
             guessCnt,
             compTime,
             sol.values.tolist(),
@@ -185,19 +200,29 @@ class Sudoku(csp2.CSP):
         n.remove(varIdx)
         return n
 
-    def inferences(self):
-        changed = InferenceResult.change
-        while changed == InferenceResult.change:
-            changed = InferenceResult.noChange
-            changed += self.ac3()
+    def inferences(self, infTypes):
+        changed = csp2.InferenceResult.change
+        while changed == csp2.InferenceResult.change:
+            changed = csp2.InferenceResult.noChange
+            for infT in infTypes:
+                if infT == InferenceType.ac3:
+                    result = self.ac3()
+                # elif infT == InferenceType.somethingElse:
+                #     result = self.somethingElse()
+                if result == csp2.InferenceResult.failure:
+                    return result
+                changed = (result if result == csp2.InferenceResult.change
+                        else changed)
 
-    def ac3(self):
+    def ac3(self, repeat=True):
         anyChange = False
         q = list(self.unassignedVariablesIndexes())
         while len(q) > 0:
             change = False
             varIdx = q.pop()
-            domain = self.d[varIdx]
+            domain = self.d.get(varIdx)
+            if domain is None:
+                continue
             # indices of assigned neighbors
             neighbors = self.neighbors(varIdx)
             aIdxs = self.a.viewkeys() & neighbors
@@ -207,13 +232,18 @@ class Sudoku(csp2.CSP):
                     anyChange = True
                     change = True
                     if len(domain) == 0:
-                        return InferenceResult.failure
+                        return csp2.InferenceResult.failure
                 except:
                     pass
-            if change:
+            if change and len(domain) == 1:
+                # create an assignment for this variable
+                self.a[varIdx] = self.d[varIdx].pop()
+                del self.d[varIdx]
+            if change and repeat:
                 # add unassigned neighbors back to q
                 q += self.d.viewkeys() & neighbors
-        return InferenceResult.change if anyChange else InferenceResult.noChange
+        return (csp2.InferenceResult.change if anyChange
+                else csp2.InferenceResult.noChange)
 
     @staticmethod
     def domainAssigned(fn):
@@ -239,10 +269,8 @@ class Sudoku(csp2.CSP):
         return d, a
 
 
-class InferenceResult:
-    noChange = 0
-    change = 1
-    failure = 2
+class InferenceType:
+    ac3 = 'ac3'
 
 
 def parseArgs(args):
@@ -264,7 +292,7 @@ def parseArgs(args):
         '-n', '--number',
         default=3,
         type=int,
-        help='Problem number in {}'.format(range(2, 4)),
+        help='Problem number in {}'.format(range(2, 5)),
     )
     return parser.parse_args()
 
