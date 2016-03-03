@@ -1,4 +1,8 @@
 from __future__ import print_function
+import datetime as dt
+
+
+TIMEOUT = dt.timedelta(minutes=5)
 
 
 def noReorder(csp):
@@ -15,11 +19,19 @@ def simpleBacktrackSearch(
     csp,
     guessCnt=0,
     selectUnassignedVariableIndex=noReorder,
-    inferences = [],
+    inferences=[],
+    start=None,
 ):
+    if dt.datetime.now()-start > TIMEOUT:
+        return SearchResult.timeout, None, guessCnt
     if csp.isCompleteAssignment():
-        return csp.assignments(), guessCnt
-    csp.inferences(inferences)
+        return SearchResult.success, csp.assignments(), guessCnt
+    result = csp.inferences(inferences)
+    if result == InferenceResult.failure:
+        return SearchResult.failure, None, guessCnt
+    elif result == InferenceResult.change:
+        if csp.isCompleteAssignment():
+            return SearchResult.success, csp.assignments(), guessCnt
     varIdx = selectUnassignedVariableIndex(csp)
     values = csp.orderDomainValues(varIdx)
     guessCnt += len(values)-1
@@ -27,15 +39,20 @@ def simpleBacktrackSearch(
         if csp.isConsistent(varIdx, val):
             varD = csp.domain(varIdx)
             csp.setAssignment(varIdx, val)
-            result, guessCnt = simpleBacktrackSearch(
+            result, sol, guessCnt = simpleBacktrackSearch(
                 csp.copy(),
                 guessCnt=guessCnt,
                 selectUnassignedVariableIndex=selectUnassignedVariableIndex,
+                inferences=inferences,
+                start=start,
             )
-            if result is not None:
-                return result, guessCnt
+            # if result is not None:
+            if result == SearchResult.success:
+                return result, sol, guessCnt
+            elif result == SearchResult.timeout:
+                return result, None, guessCnt
             csp.setDomain(varIdx, varD)
-    return None, guessCnt
+    return SearchResult.failure, None, guessCnt
 
 
 class CSP:
@@ -71,6 +88,12 @@ class CSP:
 
 
 class InferenceResult:
-    noChange = 0
-    change = 1
-    failure = 2
+    noChange = 1
+    change = 2
+    failure = 3
+
+
+class SearchResult:
+    failure = 1
+    success = 2
+    timeout = 3

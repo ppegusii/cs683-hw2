@@ -6,6 +6,7 @@ import datetime as dt
 import itertools as it
 import multiprocessing as mp
 import numpy as np
+import operator
 import os
 import pandas as pd
 import sys
@@ -26,13 +27,16 @@ def main():
 def p2(args):
     d, a = Sudoku.domainAssigned('../data/sudoku_example/sudoku_ex.txt')
     s = Sudoku(d, a)
-    sol = csp2.simpleBacktrackSearch(
+    result, sol, guessCnt = csp2.simpleBacktrackSearch(
         s,
         selectUnassignedVariableIndex=csp2.noReorder,
+        start=dt.datetime.now(),
+        # inferences=[InferenceType.ac3],
+        # inferences=[InferenceType.nc],
     )
     print(sol)
     assert np.all(np.equal(
-        sol[0].values,
+        sol.values,
         np.array([
             [4, 3, 5, 2, 6, 9, 7, 8, 1],
             [6, 8, 2, 5, 7, 1, 4, 9, 3],
@@ -64,13 +68,22 @@ def p4(args):
     pool = mp.Pool()
     pool.map(
         pEach,
-        [(args, fn, csp2.mrv.__name__, [InferenceType.ac3]) for fn in
-         sorted(next(os.walk(args.puzzledir))[2])],
+        # [(args, fn, csp2.mrv.__name__, [InferenceType.nc])
+        # [(args, fn, csp2.mrv.__name__, [InferenceType.ac3, InferenceType.ht])
+        # [(args, fn, csp2.mrv.__name__, [InferenceType.ac3, InferenceType.nc, InferenceType.ht])
+        # [(args, fn, csp2.mrv.__name__, [InferenceType.ht])
+        # [(args, fn, csp2.mrv.__name__, [InferenceType.nt])
+        # [(args, fn, csp2.mrv.__name__, [InferenceType.ac3, InferenceType.nc, InferenceType.nt])
+        # [(args, fn, csp2.mrv.__name__, [InferenceType.ac3])
+        [(args, fn, csp2.mrv.__name__, [InferenceType.ac3, InferenceType.nc])
+         for fn in sorted(next(os.walk(args.puzzledir))[2])],
     )
 
 
 def pEach(argsFnOrderInf):
     args, fn, order, infTypes = argsFnOrderInf
+    # if fn.find('015') == -1:
+    #     return
     order = csp2.noReorder if order == csp2.noReorder.__name__ else csp2.mrv
     outFile = os.path.join(
         args.outdir,
@@ -89,11 +102,20 @@ def pEach(argsFnOrderInf):
     start = dt.datetime.now()
     s = Sudoku(d, a)
     s.ac3(repeat=False)
-    sol, guessCnt = csp2.simpleBacktrackSearch(
+    # print('Product of domain sizes: {}'.format(
+    #     reduce(operator.mul, [len(x)/2. for x in s.d.values()])
+    # ))
+    # return
+    result, sol, guessCnt = csp2.simpleBacktrackSearch(
         s,
         selectUnassignedVariableIndex=order,
+        inferences=infTypes,
+        start=dt.datetime.now(),
     )
     compTime = (dt.datetime.now()-start).total_seconds()
+    if result == csp2.SearchResult.failure:
+        print('Error on {}'.format(fn))
+        return
     with open(outFile, 'w') as f:
         f.write('puzzle, order, guessCnt, compTime, solution\n')
         f.write('"{}","{}","{}","{}","{}","{}"'.format(
@@ -102,11 +124,12 @@ def pEach(argsFnOrderInf):
             '-'.join(infTypes),
             guessCnt,
             compTime,
-            sol.values.tolist(),
+            sol.values.tolist() if sol is not None else 'timeout',
         ))
     print('{} Finished: {} {} {} {}'.format(
         dt.datetime.now(), os.path.splitext(fn)[0], order.__name__, guessCnt,
         compTime))
+    # sys.exit(0)
 
 
 class Sudoku(csp2.CSP):
@@ -201,18 +224,26 @@ class Sudoku(csp2.CSP):
         return n
 
     def inferences(self, infTypes):
-        changed = csp2.InferenceResult.change
-        while changed == csp2.InferenceResult.change:
-            changed = csp2.InferenceResult.noChange
+        anyChange = False
+        changed = True
+        while changed:
+            changed = False
             for infT in infTypes:
                 if infT == InferenceType.ac3:
                     result = self.ac3()
-                # elif infT == InferenceType.somethingElse:
-                #     result = self.somethingElse()
+                elif infT == InferenceType.nc:
+                    result = self.neighborsCant()
+                elif infT == InferenceType.ht:
+                    result = self.hiddenTwin()
+                elif infT == InferenceType.nt:
+                    result = self.nakedTwin()
                 if result == csp2.InferenceResult.failure:
                     return result
-                changed = (result if result == csp2.InferenceResult.change
-                        else changed)
+                if result == csp2.InferenceResult.change:
+                    anyChange = True
+                    changed = True
+        return (csp2.InferenceResult.change if anyChange else
+                csp2.InferenceResult.noChange)
 
     def ac3(self, repeat=True):
         anyChange = False
@@ -268,9 +299,103 @@ class Sudoku(csp2.CSP):
                     a[(r, c)] = int(p.loc[r, c])
         return d, a
 
+    def neighborsCant(self):
+        anyChange = False
+        q = list(self.unassignedVariablesIndexes())
+        while len(q) > 0:
+            varIdx = q.pop()
+            domain = self.d.get(varIdx)
+            if domain is None:
+                continue
+            domain = copy.copy(domain)
+            # indices of assigned neighbors
+            neighbors = self.neighbors(varIdx)
+            aIdxs = self.a.viewkeys() & neighbors
+            for aIdx in aIdxs:
+                try:
+                    domain.remove(self.a[aIdx])
+                except:
+                    pass
+            # indices of unassigned neighbors
+            uaIdxs = neighbors & self.d.viewkeys()
+            for uaIdx in uaIdxs:
+                domain = domain - self.d[uaIdx]
+            if len(domain) == 1:
+                anyChange = True
+                self.a[varIdx] = domain.pop()
+                del self.d[varIdx]
+                q += list(uaIdxs)
+            '''
+            This should be unreachable.
+            elif len(domain) > 1 and len(domain) != len(self.d[varIdx]):
+                anyChange = True
+                self.d[varIdx] = domain
+                q += list(uaIdxs)
+            '''
+        return (csp2.InferenceResult.change if anyChange
+                else csp2.InferenceResult.noChange)
+
+    def hiddenTwin(self):
+        anyChange = False
+        q = list(self.unassignedVariablesIndexes())
+        while len(q) > 1:
+            varIdx = q.pop()
+            domain = self.d.get(varIdx)
+            if domain is None:
+                continue
+            neighbors = self.neighbors(varIdx)
+            # indices of unassigned neighbors
+            uaIdxs = neighbors & self.d.viewkeys()
+            for uaIdx in uaIdxs:
+                if len(domain) == 2 and len(self.d[uaIdx]) == 2:
+                    continue
+                comVals = domain & self.d[uaIdx]
+                if len(comVals) == 2:
+                    others = uaIdxs - set([uaIdx])
+                    shared = False
+                    for othIdx in others:
+                        if len(comVals & self.d[othIdx]) > 0:
+                            shared = True
+                            break
+                    if shared:
+                        continue
+                    anyChange = True
+                    self.d[varIdx] = copy.copy(comVals)
+                    self.d[uaIdx] = comVals
+                    q.remove(uaIdx)
+                    break
+        return (csp2.InferenceResult.change if anyChange
+                else csp2.InferenceResult.noChange)
+
+    def nakedTwin(self):
+        anyChange = False
+        q = list(self.unassignedVariablesIndexes())
+        while len(q) > 1:
+            varIdx = q.pop()
+            domain = self.d.get(varIdx)
+            if domain is None or len(domain) != 2:
+                continue
+            neighbors = self.neighbors(varIdx)
+            # indices of unassigned neighbors
+            uaIdxs = neighbors & self.d.viewkeys()
+            for uaIdx in uaIdxs:
+                neighDom = self.d[uaIdx]
+                if neighDom != 2 or len(neighDom & domain) != 2:
+                    continue
+                others = uaIdxs - set([uaIdx])
+                for othIdx in others:
+                    if len(self.d[othIdx] & domain) > 0:
+                        anyChange = True
+                        self.d[othIdx] = self.d[othIdx] - domain
+        return (csp2.InferenceResult.change if anyChange
+                else csp2.InferenceResult.noChange)
+
 
 class InferenceType:
     ac3 = 'ac3'
+    nc = 'nc'
+    ht = 'ht'
+    nt = 'nt'
 
 
 def parseArgs(args):

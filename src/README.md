@@ -1,47 +1,26 @@
-# Homework 1
+# Homework 2
 ## Building
 ### Dependencies
-Programs are dependent upon Python 2.7.11, pandas 0.17.1, matplotlib 1.5.1, and numpy 1.10.4.
-## Running Knight Search
+Programs are dependent upon Python 2.7.11, pandas 0.17.1, and numpy 1.10.4.
+## Running
 ```
-python ./p5.py -h
-usage: p5.py [-h] [-d DIR] [-s SEED] [-m MAX] [-i ITER] [-H HEURISTIC]
+python ./sudoku2.py -h
+usage: sudoku2.py [-h] [-p PUZZLEDIR] [-o OUTDIR] [-n NUMBER]
 
-Solve knight movement using A* and plot results. Written in Python 2.7.
-
-optional arguments:
-	-h, --help            show this help message and exit
-	-d DIR, --dir DIR     Directory to place results. (default:
-							../doc/report/fig/)
-	-s SEED, --seed SEED  Seed for random number generator. (default: 0)
-	-m MAX, --max MAX     Maximum solution coordinate distance from origin.
-							(default: 20)
-	-i ITER, --iter ITER  Number of iterations. (default: 10)
-	-H HEURISTIC, --heuristic HEURISTIC
-							Heuristic function in [0, 1, 2, 3, 4]. (default: 4)
-```
-### Example
-`python ./p5.py`
-## Running TSP Search
-```
-python ./p6.py -h
-usage: p6.py [-h] [-d DIR] [-s SEED] [-c CITIES] [-r] [-l] [-i ITER]
-             [-H HEURISTIC]
-
-Solve TSP using A* and plot results. Written in Python 2.7.
+Solve Sudoku using search and inference. Written in Python 2.7.
 
 optional arguments:
 	-h, --help            show this help message and exit
-	-d DIR, --dir DIR     Directory to place results. (default:
-							../doc/report/fig/)
-	-s SEED, --seed SEED  Seed for random number generator. (default: 0)
-	-c CITIES, --cities CITIES
-							Number of cities on tour. (default: 20)
-	-r, --random          Randomize number of cities. (default: False)
-	-l, --local           Compare A* to local search. (default: False)
-	-i ITER, --iter ITER  Number of iterations. (default: 10)
-	-H HEURISTIC, --heuristic HEURISTIC
-							Heuristic function in [0, 1]. (default: 0)
+	-p PUZZLEDIR, --puzzledir PUZZLEDIR
+		Directory containing puzzles. (default:	../data/sudoku_puzzles/)
+	-o OUTDIR, --outdir OUTDIR
+		Directory to place results. (default: ../data/sudoku_out/)
+	-n NUMBER, --number NUMBER
+		Problem number in [2, 3, 4] (default: 3)
 ```
-### Example
-`python ./p6.py -r`
+### Example part 2
+`python ./sudoku2.py -n 2`
+### Example part 3
+`python ./sudoku2.py -n 3`
+### Example part 4
+`python ./sudoku2.py -n 4`
